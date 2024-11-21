@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Parkinson's Disease Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        select,
+        button,
+        a {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+        select {
+            background-color: #fff;
+        }
+        #options2 option:first-child {
+            color: #000;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        button,
+        a {
+            border: none;
+            text-decoration: none;
+            text-align: center;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        a {
+            background-color: #e74c3c;
+            color: white;
+            font-size: 14px;
+        }
+        a:hover {
+            background-color: #c0392b;
+        }
+        #replayButtonContainer button.replaying {
+            background-color: #f39c12;
+        }
+        #recordingButtonContainer button.replaying {
+            background-color: #f39c12;
+        }
+        #display {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #27ae60;
+        }
+        #specificOptionContainer,
+        #recordButton,
+        #replayButtonContainer {
+            display: none;
+        }
+        .recording {
+            background-color: green !important;
+        }
+        .disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+    </style>
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordingDuration = 3000;
+        let countdownInterval;
+        let audioUrl;
+        let mediaStream;
+
+        function validateForm() {
+            var select1 = document.getElementById("options1");
+            var select2 = document.getElementById("options2");
+            if (select1.value === "" || select2.value === "") {
+                alert("Please select an option before submitting.");
+                return false;
+            }
+            return true;
+        }
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaStream = stream;
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        audioUrl = URL.createObjectURL(audioBlob);
+                        const audioInput = document.getElementById("audioInput");
+                        const file = new File([audioBlob], "voice_message.wav");
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        audioInput.files = dataTransfer.files;
+                        document.getElementById("replayButtonContainer").style.display = "block";
+                        mediaStream.getTracks().forEach(track => track.stop());
+                        const recordButton = document.getElementById("recordButtonText").parentNode;
+                        recordButton.classList.remove("recording");
+                        recordButton.classList.remove("disabled");
+                    };
+
+                    let secondsLeft = recordingDuration / 1000;
+                    const recordButton = document.getElementById("recordButtonText");
+                    recordButton.innerHTML = `Recording... ${secondsLeft} seconds left`;
+
+                    const recordButtonElement = document.getElementById("recordButtonText").parentNode;
+                    recordButtonElement.classList.add("recording");
+                    recordButtonElement.classList.add("disabled");
+
+                    countdownInterval = setInterval(() => {
+                        secondsLeft -= 1;
+                        recordButton.innerHTML = `Recording... ${secondsLeft} seconds left`;
+
+                        if (secondsLeft <= 0) {
+                            clearInterval(countdownInterval);
+                            mediaRecorder.stop();
+                            recordButton.innerHTML = "Start Recording";
+                        }
+                    }, 1000);
+
+                    setTimeout(() => {
+                        clearInterval(countdownInterval);
+                        mediaRecorder.stop();
+                        recordButton.innerHTML = "Start Recording";
+                    }, recordingDuration);
+                });
+        }
+
+        function replayRecording() {
+            const audio = new Audio(audioUrl);
+            const replayButton = document.querySelector("#replayButtonContainer button");
+            replayButton.classList.add("replaying");
+            replayButton.classList.add("disabled");
+            audio.play();
+            audio.onended = () => {
+                replayButton.classList.remove("replaying");
+                replayButton.classList.remove("disabled");
+            };
+        }
+
+        function updateOptions() {
+            var select1 = document.getElementById("options1");
+            var select2 = document.getElementById("options2");
+            var specificOptionContainer = document.getElementById("specificOptionContainer");
+            var recordButton = document.getElementById("recordButton");
+            var recordLabel = document.getElementById("recordLabel");
+            select2.innerHTML = "";
+            specificOptionContainer.style.display = "none";
+            recordButton.style.display = "none";
+
+            if (select1.value !== "") {
+                specificOptionContainer.style.display = "block";
+                var defaultOption = document.createElement("option");
+                defaultOption.value = "";
+                defaultOption.text = "Select an option";
+                defaultOption.selected = true;
+                defaultOption.disabled = true;
+                select2.appendChild(defaultOption);
+
+                var audioFiles = {};
+                if (select1.value === "vowels") {
+                    recordingDuration = 2000; // 2 seconds for vowels
+                    audioFiles = JSON.parse('{{ vowel_audio_files | tojson | safe }}');
+                } else if (select1.value === "ddk") {
+                    recordingDuration = 3000; // 3 seconds for DDK
+                    audioFiles = JSON.parse('{{ ddk_audio_files | tojson | safe }}');
+                }
+
+                var options = Object.keys(audioFiles);
+                options.forEach(function(option) {
+                    var optElement = document.createElement("option");
+                    optElement.value = option;
+                    optElement.text = option;
+                    optElement.dataset.audioUrl = audioFiles[option];
+                    select2.appendChild(optElement);
+                });
+            }
+        }
+
+        function showRecordButton() {
+            var select2 = document.getElementById("options2");
+            var recordButton = document.getElementById("recordButton");
+            var recordLabel = document.getElementById("recordLabel");
+            if (select2.value !== "") {
+                recordButton.style.display = "block";
+                recordLabel.innerHTML = "Record a voice message (" + (recordingDuration / 1000) + " seconds):";
+                updateAudioSource(select2.options[select2.selectedIndex].dataset.audioUrl);
+            } else {
+                recordButton.style.display = "none";
+                recordLabel.innerHTML = "Record a voice message:";
+                updateAudioSource(null);
+            }
+        }
+
+        function updateAudioSource(audioUrl) {
+            var audioElement = document.querySelector("#recordButton audio source");
+            if (audioUrl) {
+                audioElement.src = audioUrl;
+            } else {
+                audioElement.src = "";
+            }
+            audioElement.parentElement.load(); // Reload the audio element
+        }
+
+        function showPrediction() {
+            var display = document.getElementById("display");
+            display.style.display = "block";
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Parkinson's Disease Test</h1>
+        <form method="POST" action="/predict" enctype="multipart/form-data" onsubmit="return validateForm()">
+            <label for="options1">Choose an option:</label>
+            <select id="options1" name="options1" onchange="updateOptions()">
+                <option value="">Select an option</option>
+                <option value="vowels">Vowels</option>
+                <option value="ddk">DDK</option>
+            </select>
+
+            <div id="specificOptionContainer">
+                <label for="options2">Choose a specific option:</label>
+                <select id="options2" name="options2" onchange="showRecordButton()">
+                    <option value="">Select an option</option>
+                </select>
+            </div>
+
+            <div id="recordButton">
+                <audio controls>
+                    <source src="" type="audio/wav">
+                </audio>
+                <br>
+                <label id="recordLabel" for="recording">Record a voice message similar to the example above:</label>
+                <button type="button" onclick="startRecording()"><span id="recordButtonText">Start Recording</span></button>
+            </div>
+            <input type="file" id="audioInput" name="content" style="display:none;">
+            <input type="hidden" id="selectedOption" name="selectedOption">  <!-- Added hidden input -->
+
+            <div id="replayButtonContainer">
+                <button type="button" onclick="replayRecording()">Replay Recording</button>
+            </div>
+
+            <div class="button-group">
+                <button type="submit">Submit</button>
+                <a href="/">Reset</a>
+            </div>
+        </form>
+        <p id="display">{{ prediction }}</p>
+    </div>
+    <script>
+        // Ensure selected option is set in the hidden input before form submission
+        document.querySelector('form').addEventListener('submit', function() {
+            document.getElementById('selectedOption').value = document.getElementById('options2').value;
+        });
+    </script>
+</body>
+</html>
