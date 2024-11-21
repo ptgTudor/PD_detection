@@ -1,0 +1,3 @@
+ffmpeg.exe -v o -i audio_input.wav -ar 16000 audio_output.wav
+for %i in (*wav) do ffmpeg.exe -v 0 -i %i -ar 16000 hc_output/%~ni.wav
+for %i in (*wav) do ffmpeg.exe -v 0 -i %i -ar 16000 pd_output/%~ni.wav
